@@ -10,7 +10,7 @@ class StringUtils {
 		
 		try {
 			bytes = str.getBytes("UTF-8");
-		} catch (UnsupportedEncodingException e) {
+		} catch (UnsupportedEncodingException e) { 
 			e.printStackTrace();
 		}
 		
