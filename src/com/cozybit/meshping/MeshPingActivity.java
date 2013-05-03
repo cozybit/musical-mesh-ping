@@ -6,21 +6,88 @@ import com.samsung.chord.IChordChannelListener;
 import com.samsung.chord.IChordManagerListener;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.ImageButton;
 
-public class MeshPingActivity extends Activity implements OnClickListener 
+public class MeshPingActivity extends Activity 
+	implements OnClickListener
+			, ChordService.IChordServiceListener 
 {
+    // **********************************************************************
+    // Using Service
+    // **********************************************************************
+    private ChordService mChordService = null;
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+
+        	Log.d(TAG,  "onServiceConnected()");
+            ChordService.ChordServiceBinder binder = (ChordService.ChordServiceBinder)service;
+            mChordService = binder.getService();
+            try {
+                mChordService.initialize(MeshPingActivity.this);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            
+            mChordService.start(ChordManager.INTERFACE_TYPE_WIFI);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            // TODO Auto-generated method stub
+            Log.i(TAG, "onServiceDisconnected()");
+            mChordService = null;
+        }
+    };
+
+    public void bindChordService() {
+        Log.i(TAG, "bindChordService()");
+        if (mChordService == null) {
+            Intent intent = new Intent(
+					"com.cozybit.meshping.ChordService.SERVICE_BIND");
+            bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+        }
+    }
+
+    private void unbindChordService() {
+        Log.i(TAG, "unbindChordService()");
+
+        if (null != mChordService) {
+            unbindService(mConnection);
+        }
+        mChordService = null;
+    }
+
+    private void startService() {
+        Log.i(TAG, "startService()");
+        Intent intent = new Intent("com.cozybit.meshping.ChordService.SERVICE_START");
+        startService(intent);
+    }
+
+    private void stopService() {
+        Log.i(TAG, "stopService()");
+        Intent intent = new Intent("com.cozybit.meshping.ChordService.SERVICE_STOP");
+        stopService(intent);
+    }
 	
 	static final String TAG = "MeshPingActivity";
 
 	private static final String CHORD_CHANNEL_NAME = "COZYBIT_MESH_PING";
 	
-	ImageButton mPingButton;	
+	ImageButton mPingButton;
+	
 	NotePlayer mNotePlayer = null;
 	ChordManager mChord = null;
 
@@ -30,146 +97,30 @@ public class MeshPingActivity extends Activity implements OnClickListener
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
+        startService();
+        bindChordService();
+		
 		mNotePlayer = new NotePlayer(getApplicationContext());
 		
 		mPingButton = (ImageButton) findViewById(R.id.pingButton);
 		mPingButton.setOnClickListener(this);
 	}
 	
-	private void setupChord()
-	{
-		if ( mChord != null )
-			return;
-		
-		mChord = ChordManager.getInstance(getApplicationContext());
-		
-		mChord.setTempDirectory(getCacheDir().getAbsolutePath());
-        mChord.setHandleEventLooper(getMainLooper());
-		
-		int start = mChord.start(ChordManager.INTERFACE_TYPE_WIFI, mChordManagerListener);
-		Log.i(TAG, "ChordManager.start() = " + (start == ChordManager.ERROR_NONE) + " (" + start + ")");
-	}
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unbindChordService();
+        stopService();
+    }
 	
-	private void tearDownChord()
-	{
-		mPingChannel = null;
-		mPublicChannel = null;
-		
-		mChord.stop();
-		mChord = null;
-	}
-	
-	IChordManagerListener mChordManagerListener = new IChordManagerListener() {
+	void onDataReceived(String fromNode, String fromChannel, String payloadType, byte[][] payload) {
 
-		@Override
-		public void onError(int arg0) {
-			Log.e(TAG, "Chord failed: " + arg0);
-			mPingChannel = null;
-			mPublicChannel = null;
-		}
-
-		@Override
-		public void onNetworkDisconnected() {
-		}
-
-		@Override
-		public void onStarted(String name, int reason) 
+		if ( payloadType.equals("PING") )
 		{
-			if (IChordManagerListener.STARTED_BY_RECONNECTION == reason)
-			{
-				Log.e(TAG, "STARTED_BY_RECONNECTION");
-				return;
-			}
-			
-			/*if ( mChord.getJoinedChannel(CHORD_CHANNEL_NAME) != null )
-			{
-				Log.w(TAG, "Chord claims we're already in the channel re-joining!");
-				
-				mChord.leaveChannel(CHORD_CHANNEL_NAME);
-				mChord.leaveChannel(ChordManager.PUBLIC_CHANNEL);
-			}*/
-			
-			mPublicChannel = mChord.joinChannel(ChordManager.PUBLIC_CHANNEL, mChordChannelListener);
-			mPingChannel = mChord.joinChannel(CHORD_CHANNEL_NAME, mChordChannelListener);
+			String note = StringUtils.fromUtf8(payload[0]);
+			mNotePlayer.playNote(note);
 		}
-	};
-	
-	IChordChannel mPingChannel = null;
-	IChordChannel mPublicChannel = null;
-	
-	IChordChannelListener mChordChannelListener = new IChordChannelListener() {
-		
-		@Override
-		public void onDataReceived(String fromNode, String fromChannel, String payloadType, byte[][] payload) {
-
-			if ( payloadType.equals("PING") )
-			{
-				IChordChannel channel = mChord.getJoinedChannel(CHORD_CHANNEL_NAME);
-				if ( channel == null )
-					return;
-
-				String note = StringUtils.fromUtf8(payload[0]);
-				mNotePlayer.playNote(note);
-			}
-		}
-
-		@Override
-		public void onFileChunkReceived(String arg0, String arg1, String arg2,
-				String arg3, String arg4, String arg5, long arg6, long arg7) { }
-
-		@Override
-		public void onFileChunkSent(String arg0, String arg1, String arg2,
-				String arg3, String arg4, String arg5, long arg6, long arg7,
-				long arg8) { }
-
-		@Override
-		public void onFileFailed(String arg0, String arg1, String arg2,
-				String arg3, String arg4, int arg5) { }
-
-		@Override
-		public void onFileReceived(String arg0, String arg1, String arg2,
-				String arg3, String arg4, String arg5, long arg6, String arg7) { }
-
-		@Override
-		public void onFileSent(String arg0, String arg1, String arg2, String arg3,
-				String arg4, String arg5) { }
-
-		@Override
-		public void onFileWillReceive(String arg0, String arg1, String arg2,
-				String arg3, String arg4, String arg5, long arg6) { }
-
-		@Override
-		public void onNodeLeft(String fromNode, String fromChannel) {
-            Log.v(TAG, "onNodeLeft(), fromNode : " + fromNode + ", fromChannel : "
-                    + fromChannel);
-		}
-
-		@Override
-		public void onNodeJoined(String fromNode, String fromChannel) {
-            Log.v(TAG, "onNodeJoined(), fromNode : " + fromNode + ", fromChannel : "
-                    + fromChannel);
-		}
-	};
-	
-	@Override
-	protected void onResume() {
-		super.onResume();
-		setupChord();
-		Log.i(TAG, "onResume()");
-	};
-	
-	@Override
-	protected void onStop() {
-		super.onStop();
-		Log.i(TAG, "onStop()");
-	};
-	
-	@Override
-	protected void onPause() {
-		super.onPause();
-		tearDownChord();
-		Log.i(TAG, "onPause()");
-	};	
+	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
@@ -183,18 +134,73 @@ public class MeshPingActivity extends Activity implements OnClickListener
 		
 		Log.i(TAG, "PING!");
 		
-		if ( mPingChannel == null )
-			return;
-		
 		int idx = 1;
 		String[] e_minor_7 = { "e", "b", "d", "g" };
 		
 		mNotePlayer.playNote(e_minor_7[0]);
 		
-		for ( String node : mPingChannel.getJoinedNodeList() )
+		for ( String node : mChordService.getJoinedNodeList(CHORD_CHANNEL_NAME) )
 		{
 			idx = (idx + 1) % e_minor_7.length;
-			mPingChannel.sendData(node, "PING", new byte[][] { StringUtils.toUtf8(e_minor_7[idx]) });
+			mChordService.sendData(CHORD_CHANNEL_NAME, node, "PING", StringUtils.toUtf8(e_minor_7[idx]));
 		}
+	}
+
+	@Override
+	public void onReceiveMessage(String node, String channel, String dataType, String message) {
+		
+		if ( ! dataType.equals("PING") )
+			return;
+		
+		mNotePlayer.playNote(message);
+	}
+
+	@Override
+	public void onFileWillReceive(String node, String channel, String fileName,
+			String exchangeId) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onFileProgress(boolean bSend, String node, String channel,
+			int progress, String exchangeId) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onFileCompleted(int reason, String node, String channel,
+			String exchangeId, String fileName) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onNodeEvent(String node, String channel, boolean bJoined) {
+		
+		if (channel == ChordManager.PUBLIC_CHANNEL)
+		{
+			mChordService.joinChannel(CHORD_CHANNEL_NAME);
+		}
+		
+	}
+
+	@Override
+	public void onNetworkDisconnected() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onUpdateNodeInfo(String nodeName, String ipAddress) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onConnectivityChanged() {
+		// TODO Auto-generated method stub
+		
 	}
 }
