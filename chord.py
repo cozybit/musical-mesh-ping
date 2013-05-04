@@ -32,7 +32,7 @@ notes = {
 
 rate=44100
 time=5.0
-amplitude=0.4
+amplitude=0.3
 samplewidth=2 # bytes
 
 for freq in notes:
