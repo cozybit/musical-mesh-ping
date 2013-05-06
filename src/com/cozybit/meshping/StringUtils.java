@@ -19,7 +19,7 @@ class StringUtils {
 	
 	public static String fromUtf8(byte[] bytes)
 	{
-		String str = "";
+		String str = null;
 		
 		try {
 			str = new String(bytes, "UTF-8");

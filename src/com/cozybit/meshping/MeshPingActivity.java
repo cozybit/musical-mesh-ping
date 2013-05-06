@@ -1,9 +1,6 @@
 package com.cozybit.meshping;
 
 import com.samsung.chord.ChordManager;
-import com.samsung.chord.IChordChannel;
-import com.samsung.chord.IChordChannelListener;
-import com.samsung.chord.IChordManagerListener;
 
 import android.app.Activity;
 import android.content.ComponentName;
@@ -16,15 +13,13 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
+import android.widget.Spinner;
 
 public class MeshPingActivity extends Activity 
-	implements OnClickListener
-			, ChordService.IChordServiceListener 
+	implements OnClickListener, ChordService.IChordServiceListener 
 {
-    // **********************************************************************
-    // Using Service
-    // **********************************************************************
     private ChordService mChordService = null;
 
     private ServiceConnection mConnection = new ServiceConnection() {
@@ -41,7 +36,8 @@ public class MeshPingActivity extends Activity
                 e.printStackTrace();
             }
             
-            mChordService.start(ChordManager.INTERFACE_TYPE_WIFI);
+            int retCode = mChordService.start(ChordManager.INTERFACE_TYPE_WIFI);
+            Log.i(TAG, "mChordService.start() = " + retCode);
         }
 
         @Override
@@ -90,6 +86,8 @@ public class MeshPingActivity extends Activity
 	
 	NotePlayer mNotePlayer = null;
 	ChordManager mChord = null;
+	
+	Spinner mSpinner;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -97,13 +95,23 @@ public class MeshPingActivity extends Activity
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
-        startService();
-        bindChordService();
+		startService();
+		bindChordService();
 		
 		mNotePlayer = new NotePlayer(getApplicationContext());
 		
 		mPingButton = (ImageButton) findViewById(R.id.pingButton);
 		mPingButton.setOnClickListener(this);
+		
+		mSpinner = (Spinner) findViewById(R.id.spinner1);
+		
+		ArrayAdapter<String> arrayAdapter = 
+			new ArrayAdapter<String>(
+				this,
+				android.R.layout.simple_spinner_dropdown_item,
+				NotePlayer.C_CHORD_NAMES);
+		
+		mSpinner.setAdapter(arrayAdapter);		
 	}
 	
     @Override
@@ -133,16 +141,17 @@ public class MeshPingActivity extends Activity
 	public void onClick(View v) {
 		
 		Log.i(TAG, "PING!");
-		
 		int idx = 1;
-		String[] e_minor_7 = { "e", "b", "d", "g" };
 		
-		mNotePlayer.playNote(e_minor_7[0]);
+		String chord = (String)mSpinner.getSelectedItem();
+		String[] notes = mNotePlayer.getChord(chord);
+		
+		mNotePlayer.playNote(notes[0]);
 		
 		for ( String node : mChordService.getJoinedNodeList(CHORD_CHANNEL_NAME) )
 		{
-			idx = (idx + 1) % e_minor_7.length;
-			mChordService.sendData(CHORD_CHANNEL_NAME, node, "PING", StringUtils.toUtf8(e_minor_7[idx]));
+			idx = (idx + 1) % notes.length;
+			mChordService.sendData(CHORD_CHANNEL_NAME, node, "PING", StringUtils.toUtf8(notes[idx]));
 		}
 	}
 

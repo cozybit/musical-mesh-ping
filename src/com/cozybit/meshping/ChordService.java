@@ -164,7 +164,7 @@ public class ChordService extends Service {
     // Start chord
     public int start(int interfaceType) {
     	
-    	//acqureWakeLock();
+    	acquireWakeLock();
         // #3. set some values before start
         return mChord.start(interfaceType, new IChordManagerListener() {
             @Override
@@ -722,25 +722,25 @@ public class ChordService extends Service {
     // Stop chord
     public void stop() {
         Log.d(TAG, TAGClass + "stop()");
-        //releaseWakeLock();
+        releaseWakeLock();
         if (mChord != null) {
             mChord.stop();
         }
     }
     
-	private void acqureWakeLock(){
+	private void acquireWakeLock(){
 		if(null == mWakeLock){
 			PowerManager powerMgr = (PowerManager)getSystemService(Context.POWER_SERVICE);
 			mWakeLock = powerMgr.newWakeLock(PowerManager.FULL_WAKE_LOCK, "ChordApiDemo Lock");
-			Log.d(TAG, "acqureWakeLock : new");
+			Log.d(TAG, "acquireWakeLock : new");
 		}
 	  
 		if(mWakeLock.isHeld()){
-			Log.w(TAG, "acqureWakeLock : already acquire");
+			Log.w(TAG, "acquireWakeLock : already acquire");
 			mWakeLock.release();
 		}
 	  
-		 Log.d(TAG, "acqureWakeLock : acquire");
+		 Log.d(TAG, "acquireWakeLock : acquire");
 		 mWakeLock.acquire();
 	}
 
